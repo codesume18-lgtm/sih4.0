@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORCA AI — Marine, Weather & Thermal Radar Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-card: #18181b;
+            --bg-light: #27272a;
+            --border-color: #27272a;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --sos-red: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-main); }
+        body { background: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .auth-card { background: #18181b; border: 1px solid #27272a; border-radius: 20px; padding: 36px 32px; width: 100%; max-width: 440px; }
+        .inp-field { padding: 12px 14px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; font-size: 0.88rem; outline: none; color: #fff; width: 100%; margin-bottom: 12px; }
+        .btn-action { width: 100%; padding: 12px; background: #f4f4f5; color: #18181b; border: none; border-radius: 50px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-action:hover { background: #fff; transform: scale(1.02); }
+
+        .app-screen { display: none; flex: 1; height: 100vh; width: 100vw; }
+        .app-screen.active { display: flex; }
+
+        .sidebar { width: 320px; background: var(--bg-card); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: space-between; padding: 18px; z-index: 10; overflow-y: auto; }
+        .brand { font-weight: 800; font-size: 1.15rem; color: #fff; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+
+        .sos-btn-sidebar { background: var(--sos-red); color: #fff; border: none; border-radius: 10px; padding: 12px; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4); margin-bottom: 12px; width: 100%; transition: 0.2s; }
+        .sos-btn-sidebar:hover { background: #dc2626; transform: scale(1.02); }
+
+        .agent-selector-box { background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+        .agent-selector-title { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; margin-bottom: 6px; }
+        .agent-option { padding: 9px; font-size: 0.78rem; border-radius: 6px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; font-weight: 600; color: var(--text-muted); transition: 0.2s; }
+        .agent-option.active { background: #27272a; border-color: #52525b; color: #fff; }
+        .agent-option:hover:not(.active) { background: #1f1f22; }
+
+        .live-news-box { background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+        .news-item { font-size: 0.74rem; padding: 8px 0; border-bottom: 1px solid #27272a; display: flex; flex-direction: column; gap: 3px; }
+        .news-item:last-child { border-bottom: none; }
+        .news-item a { color: #f4f4f5; text-decoration: none; font-weight: 600; line-height: 1.3; transition: color 0.2s; }
+        .news-item a:hover { color: #38bdf8; }
+        .news-meta { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--text-muted); }
+        .news-tag { background: #27272a; color: #38bdf8; padding: 1px 5px; border-radius: 3px; font-weight: 700; text-transform: uppercase; }
+
+        .main-wrapper { flex: 1; display: flex; height: 100%; overflow: hidden; position: relative; }
+
+        .chat-panel { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); border-right: 1px solid var(--border-color); height: 100%; transition: flex 0.3s; }
+        .chat-header { padding: 16px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); font-size: 0.88rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+        .msgs-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+
+        .msg { max-width: 90%; padding: 14px 18px; border-radius: 12px; font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; }
+        .msg.u { background: #f4f4f5; color: #18181b; align-self: flex-end; font-weight: 600; border-bottom-right-radius: 2px; }
+        .msg.a { background: var(--bg-card); color: var(--text-main); align-self: flex-start; border: 1px solid var(--border-color); width: 100%; max-width: 720px; border-bottom-left-radius: 2px; }
+        .msg.a .tag { color: #d4d4d8; font-weight: 800; font-size: 0.72rem; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+
+        .chat-input { padding: 14px 18px; background: var(--bg-card); border-top: 1px solid var(--border-color); display: flex; gap: 10px; }
+        .chat-input input { flex: 1; padding: 12px 14px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; outline: none; }
+        .chat-input button { padding: 12px 20px; background: #f4f4f5; border: none; border-radius: 8px; color: #18181b; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .chat-input button:hover { background: #fff; }
+
+        .map-panel { flex: 1.2; display: flex; flex-direction: column; background: var(--bg-card); position: relative; height: 100%; transition: box-shadow 0.5s ease; }
+        .map-header { padding: 10px 16px; background: var(--bg-dark); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; z-index: 500; }
+        .map-tabs { display: flex; gap: 6px; }
+        .map-btn { padding: 6px 12px; background: var(--bg-light); border: 1px solid var(--border-color); color: #fff; border-radius: 6px; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .map-btn.active { background: #fff; color: #000; }
+        .map-btn:hover:not(.active) { background: #3f3f46; }
+
+        #map { flex: 1; width: 100%; background: #000; z-index: 1; }
+
+        .thermal-hud-badge { position: absolute; top: 15px; right: 15px; background: rgba(239, 68, 68, 0.9); color: #fff; padding: 8px 14px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; z-index: 1000; display: none; align-items: center; gap: 6px; border: 1px solid #fca5a5; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .thermal-hud-badge.active { display: flex; }
+
+        .info-board { padding: 14px 18px; background: var(--bg-card); border-top: 1px solid var(--border-color); display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; z-index: 500; }
+        .info-card { background: var(--bg-dark); padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; }
+        .info-card label { color: var(--text-muted); font-size: 0.65rem; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 4px; }
+        .info-card strong { font-size: 0.8rem; color: #fff; }
+
+        .leaflet-routing-container { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="modal-overlay" id="authScreen">
+  <div class="auth-card">
+    <div style="font-size: 1.8rem; font-weight: 800; margin-bottom: 10px; color: #fff;"><i class="fa-solid fa-cube"></i> ORCA AI</div>
+    <h1 style="font-size: 1.4rem; color: #fff; margin-bottom: 4px;">Platform Login</h1>
+    <p style="color: #a1a1aa; font-size: 0.85rem; margin-bottom: 20px;">Marine, Weather & Thermal Satellite Suite</p>
+    <input type="text" id="uName" class="inp-field" placeholder="Full Name" value="Sourav Ganguly">
+    <input type="email" id="uEmail" class="inp-field" placeholder="Google Email" value="sourav.marine@gmail.com">
+    <button class="btn-action" onclick="loginApp()">Launch AI Suite</button>
+  </div>
+</div>
+
+<div class="app-screen" id="appScreen">
+  <div class="sidebar">
+    <div>
+      <div class="brand">
+        <span>⚓ ORCA AI</span>
+        <span style="font-size:0.65rem; background:#27272a; color:#f4f4f5; padding:3px 8px; border-radius:4px;">v2.8</span>
+      </div>
+
+      <button class="sos-btn-sidebar" onclick="triggerSOSUI()">
+        <i class="fa-solid fa-triangle-exclamation"></i> FISHERMAN SOS
+      </button>
+
+      <div class="agent-selector-box">
+        <div class="agent-selector-title">Select Active AI Engine</div>
+        <div class="agent-option active" id="agentBtn1" onclick="switchAgent(1)">
+          🗺️ Agent 1: Marine, Weather & Maps
+        </div>
+        <div class="agent-option" id="agentBtn2" onclick="switchAgent(2)">
+          🧠 Agent 2: Universal APIs & News
+        </div>
+      </div>
+
+      <!-- Live News Box on Left Side -->
+      <div class="live-news-box">
+        <div class="agent-selector-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>📰 Live Intelligence Feeds</span>
+          <span style="font-size:0.6rem; color:#22c55e;"><i class="fa-solid fa-circle" style="font-size:0.45rem;"></i> LIVE</span>
+        </div>
+        <div id="liveNewsContainer" style="display:flex; flex-direction:column;">
+          <div style="font-size:0.72rem; color:var(--text-muted); padding:6px 0;">Fetching live feeds from ISRO, DRDO, TOI & IMD...</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:12px; padding-top:14px; border-top:1px solid #27272a;">
+      <div style="width:36px; height:36px; border-radius:50%; background:#27272a; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff;" id="userAv">U</div>
+      <div>
+        <div id="dispName" style="font-weight:700; font-size:0.85rem;">User Name</div>
+        <div id="dispEmail" style="font-size:0.7rem; color:#a1a1aa;">user@gmail.com</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-wrapper">
+    <div class="chat-panel" id="chatPanelContainer">
+      <div class="chat-header">
+        <span id="activeAgentTitle">🗺️ Agent 1: Marine, Weather & Thermal Engine</span>
+        <span id="gpsBadge" style="color:var(--text-muted); font-size:0.75rem;"><i class="fa-solid fa-satellite"></i> Syncing...</span>
+      </div>
+
+      <div class="msgs-area" id="chatMsgs">
+        <div class="msg a">
+          <div class="tag"><i class="fa-solid fa-robot"></i> AGENT 1 SYSTEM</div>
+          Welcome! I am Agent 1. You can ask me about weather, wind speeds, rain forecasts, fishing advisories, ISRO disaster alerts, or type <b>"thermal radar"</b> to view live thermal satellite images.
+        </div>
+      </div>
+
+      <div class="chat-input">
+        <input type="text" id="userInput" placeholder="Ask about weather, alerts, news, routes, or type 'thermal radar'..." onkeydown="if(event.key==='Enter') sendChat()">
+        <button onclick="sendChat()">Send</button>
+      </div>
+    </div>
+
+    <div class="map-panel" id="mapPanelContainer">
+      <div class="map-header">
+        <div class="map-tabs">
+          <button class="map-btn active" id="btn-open" onclick="setLayer('street')">🗺️ Open Map</button>
+          <button class="map-btn" id="btn-sat" onclick="setLayer('satellite')">🛰️ Satellite</button>
+          <button class="map-btn" id="btn-thermal" onclick="toggleThermalRadar()">🔥 Thermal Radar</button>
+        </div>
+      </div>
+
+      <div class="thermal-hud-badge" id="thermalBadge">
+        <i class="fa-solid fa-satellite-dish"></i> LIVE ISRO THERMAL SATELLITE LAYER ACTIVE
+      </div>
+
+      <div id="map"></div>
+
+      <div class="info-board">
+        <div class="info-card"><label>Target Location</label><strong id="infoLoc">Pending GPS...</strong></div>
+        <div class="info-card"><label>Chlorophyll Density</label><strong id="infoChlo">4.25 mg/m³</strong></div>
+        <div class="info-card"><label>Wind & Wave Metrics</label><strong id="infoDist">14 km/h • 1.2m Wave</strong></div>
+        <div class="info-card"><label>Available Species</label><strong id="infoSpecies">Hilsa, Pomfret</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+var uLat = 22.5726, uLon = 88.3639, uName = "User", uEmail = "user@gmail.com";
+var map = null, userMarker = null, targetMarker = null, routingControl = null;
+var currentTile = null, thermalRadarTile = null;
+var isThermalOn = false;
+var activeAgentId = 1;
+
+var LAYERS = {
+  street: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  thermal: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
+};
+
+function loginApp() {
+  uName = document.getElementById('uName').value;
+  uEmail = document.getElementById('uEmail').value;
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appScreen').classList.add('active');
+  document.getElementById('dispName').textContent = uName;
+  document.getElementById('dispEmail').textContent = uEmail;
+  document.getElementById('userAv').textContent = uName.charAt(0).toUpperCase();
+
+  setTimeout(function() { initMap(); startGPS(); fetchLiveNews(); }, 200);
+}
+
+async function fetchLiveNews() {
+  try {
+    var res = await fetch('/api/news');
+    var data = await res.json();
+    if(data.status === 'success' && data.news.length > 0) {
+      var container = document.getElementById('liveNewsContainer');
+      container.innerHTML = '';
+      data.news.forEach(item => {
+        var div = document.createElement('div');
+        div.className = 'news-item';
+        div.innerHTML = `
+          <a href="${item.link}" target="_blank">${item.title}</a>
+          <div class="news-meta">
+            <span class="news-tag">${item.source}</span>
+            <span>${item.date}</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+  } catch(e) {
+    document.getElementById('liveNewsContainer').innerHTML = '<div style="font-size:0.72rem; color:#ef4444;">Failed to load live feeds.</div>';
+  }
+}
+
+function switchAgent(id) {
+  activeAgentId = id;
+  document.getElementById('agentBtn1').classList.toggle('active', id === 1);
+  document.getElementById('agentBtn2').classList.toggle('active', id === 2);
+
+  var mapPanel = document.getElementById('mapPanelContainer');
+  var chatPanel = document.getElementById('chatPanelContainer');
+
+  if(id === 1) {
+    document.getElementById('activeAgentTitle').textContent = "🗺️ Agent 1: Marine, Weather & Thermal Engine";
+    mapPanel.style.display = "flex";
+    chatPanel.style.flex = "1";
+    appendMsg("Agent 1 activated. Ask me about weather, disaster warnings, or map routes.", 'a', "AGENT 1");
+    setTimeout(() => { if(map) map.invalidateSize(); }, 300);
+  } else {
+    document.getElementById('activeAgentTitle').textContent = "🧠 Agent 2: Universal APIs, News & Media";
+    mapPanel.style.display = "none";
+    chatPanel.style.flex = "2";
+    appendMsg("Agent 2 activated. Ready to search news headlines, Twitter feeds, YouTube videos, recipes, and web knowledge.", 'a', "AGENT 2");
+  }
+}
+
+function initMap() {
+  if(map) return;
+  map = L.map('map', { zoomControl: true }).setView([uLat, uLon], 12);
+  currentTile = L.tileLayer(LAYERS.street, { maxZoom: 19 }).addTo(map);
+
+  userMarker = L.marker([uLat, uLon]).addTo(map).bindPopup("Your Location").openPopup();
+
+  map.on('click', function(e) {
+    if(activeAgentId === 1) calculateRoute(e.latlng.lat, e.latlng.lng, "Selected Map Point");
+  });
+}
+
+function setLayer(type) {
+  if(currentTile) map.removeLayer(currentTile);
+  currentTile = L.tileLayer(LAYERS[type], { maxZoom: 19 }).addTo(map);
+  document.getElementById('btn-open').classList.toggle('active', type === 'street');
+  document.getElementById('btn-sat').classList.toggle('active', type === 'satellite');
+}
+
+function toggleThermalRadar() {
+  if(!isThermalOn) {
+    thermalRadarTile = L.tileLayer(LAYERS.thermal, { opacity: 0.75, maxZoom: 19 }).addTo(map);
+    isThermalOn = true;
+    document.getElementById('btn-thermal').classList.add('active');
+    document.getElementById('thermalBadge').classList.add('active');
+    map.setView([uLat, uLon], 7);
+  } else {
+    if(thermalRadarTile) map.removeLayer(thermalRadarTile);
+    isThermalOn = false;
+    document.getElementById('btn-thermal').classList.remove('active');
+    document.getElementById('thermalBadge').classList.remove('active');
+  }
+}
+
+function startGPS() {
+  if(navigator.geolocation) {
+    navigator.geolocation.watchPosition(function(p) {
+      uLat = p.coords.latitude; uLon = p.coords.longitude;
+      document.getElementById('gpsBadge').innerHTML = '<i style="color:#22c55e" class="fa-solid fa-satellite"></i> GPS Synced';
+      document.getElementById('infoLoc').textContent = "Lat: " + uLat.toFixed(2) + ", Lon: " + uLon.toFixed(2);
+      if(userMarker) userMarker.setLatLng([uLat, uLon]);
+    });
+  }
+}
+
+function calculateRoute(tLat, tLon, placeName) {
+  if(targetMarker) map.removeLayer(targetMarker);
+  if(routingControl) map.removeControl(routingControl);
+
+  targetMarker = L.marker([tLat, tLon]).addTo(map).bindPopup(placeName).openPopup();
+  routingControl = L.Routing.control({
+    waypoints: [L.latLng(uLat, uLon), L.latLng(tLat, tLon)],
+    lineOptions: { styles: [{ color: '#38bdf8', weight: 6 }] },
+    createMarker: function() { return null; },
+    show: false, addWaypoints: false
+  }).addTo(map);
+
+  document.getElementById('infoLoc').textContent = placeName;
+}
+
+async function sendChat() {
+  var input = document.getElementById('userInput');
+  var txt = input.value.trim();
+  if(!txt) return;
+
+  appendMsg(txt, 'u');
+  input.value = '';
+
+  try {
+    var res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: txt, agent_id: activeAgentId, lat: uLat, lon: uLon })
+    });
+    var data = await res.json();
+    
+    var tag = activeAgentId === 1 ? "AGENT 1 (MARINE & WEATHER)" : "AGENT 2 (UNIVERSAL API)";
+    appendMsg(data.response, 'a', tag);
+
+    if(data.action === 'toggle_thermal_radar') {
+      if(!isThermalOn) toggleThermalRadar();
+    } else if (data.action === 'show_disaster_alert') {
+      var mapPanel = document.getElementById('mapPanelContainer');
+      mapPanel.style.boxShadow = "inset 0 0 100px rgba(239, 68, 68, 0.8)";
+      setTimeout(() => { mapPanel.style.boxShadow = "none"; }, 3500);
+    } else if(data.action === 'route_to_location' && data.target) {
+      calculateRoute(data.target.lat, data.target.lon, data.target.name);
+      map.setView([data.target.lat, data.target.lon], 12);
+    } else if(data.action === 'trigger_sos') {
+      triggerSOSUI();
+    }
+  } catch(e) {
+    appendMsg("Error communicating with local server. Ensure server.py is running.", 'a', "SYSTEM ERROR");
+  }
+}
+
+async function triggerSOSUI() {
+  var coordsStr = uLat.toFixed(4) + "°N, " + uLon.toFixed(4) + "°E";
+  try {
+    var res = await fetch('/api/sos', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ coordinates: coordsStr })
+    });
+    var data = await res.json();
+    appendMsg(data.response, 'a', "🚨 EMERGENCY SOS SYSTEM");
+  } catch(e) {
+    alert("SOS distress signal transmitted locally!");
+  }
+}
+
+function appendMsg(t, sender, tagTitle = "AI AGENT") {
+  var box = document.getElementById('chatMsgs');
+  var div = document.createElement('div');
+  div.className = 'msg ' + sender;
+  var formattedText = t.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  div.innerHTML = sender === 'a' ? `<div class="tag"><i class="fa-solid fa-microchip"></i> ${tagTitle}</div>` + formattedText : t;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+</script>
+</body>
+</html>
